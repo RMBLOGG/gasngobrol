@@ -1,0 +1,145 @@
+{% extends 'base.html' %}
+{% block title %}Grup - ChatKu{% endblock %}
+
+{% block topnav %}
+<div class="d-flex align-items-center gap-2">
+  <span class="app-logo">👥</span>
+  <span class="app-name">Grup</span>
+</div>
+<button class="icon-btn" data-bs-toggle="modal" data-bs-target="#createGroupModal" title="Buat Grup Baru">
+  <i class="bi bi-plus-lg"></i>
+</button>
+{% endblock %}
+
+{% block content %}
+<div id="groupList"><div class="loading-spinner"><div class="spinner"></div></div></div>
+
+<!-- CREATE GROUP MODAL -->
+<div class="modal fade" id="createGroupModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content glass-card">
+      <div class="modal-header border-0">
+        <h5 class="modal-title">Buat Grup Baru</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label text-muted" style="font-size:13px">Nama Grup</label>
+          <input type="text" class="form-control" id="groupName" placeholder="Nama grup kamu...">
+        </div>
+        <div class="mb-3">
+          <label class="form-label text-muted" style="font-size:13px">Deskripsi (opsional)</label>
+          <textarea class="form-control" id="groupDesc" rows="2" placeholder="Deskripsi grup..."></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label text-muted" style="font-size:13px">Tambah Anggota</label>
+          <div class="search-box mb-2">
+            <i class="bi bi-search search-icon"></i>
+            <input type="text" class="form-control ps-5" id="memberSearch" placeholder="Cari username...">
+          </div>
+          <div id="memberSearchResults" class="mb-2"></div>
+          <div id="selectedMembers" class="d-flex flex-wrap gap-2"></div>
+        </div>
+      </div>
+      <div class="modal-footer border-0">
+        <button class="btn-accent px-4 py-2 rounded-3" onclick="createGroup()">Buat Grup</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let selectedMemberIds = [];
+
+async function loadGroups() {
+  const groups = await fetch('/api/groups').then(r => r.json());
+  const el = document.getElementById('groupList');
+  if (!groups.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div><div class="empty-title">Belum ada grup</div><div class="empty-sub">Buat grup baru untuk mulai chat bersama</div><button class="btn-accent px-4 py-2 rounded-3 mt-3" data-bs-toggle="modal" data-bs-target="#createGroupModal">+ Buat Grup</button></div>`;
+    return;
+  }
+  el.innerHTML = groups.map(g => `
+    <div class="chat-item fade-up" onclick="window.location='/group/${g.id}'">
+      <img src="${g.avatar_url || `https://api.dicebear.com/7.x/initials/svg?seed=${encodeURIComponent(g.name)}`}" class="avatar" alt="">
+      <div class="chat-info">
+        <div class="chat-name">${escapeHtml(g.name)}</div>
+        <div class="chat-preview">${escapeHtml(g.last_message || g.description || 'Tap untuk membuka grup')}</div>
+      </div>
+      <div class="chat-meta">
+        <div class="chat-time">${formatTime(g.last_message_at || g.created_at)}</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+const memberSearch = document.getElementById('memberSearch');
+let timer;
+memberSearch?.addEventListener('input', () => {
+  clearTimeout(timer);
+  const q = memberSearch.value.trim();
+  if (q.length < 2) { document.getElementById('memberSearchResults').innerHTML = ''; return; }
+  timer = setTimeout(async () => {
+    const users = await fetch(`/api/users/search?q=${encodeURIComponent(q)}`).then(r => r.json());
+    document.getElementById('memberSearchResults').innerHTML = users.map(u => `
+      <div class="user-list-item" onclick="addMember('${u.id}','${escapeHtml(u.display_name)}','${u.avatar_url||''}')">
+        <img src="${u.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.username}`}" class="avatar" style="width:36px;height:36px">
+        <div>
+          <div class="fw-semibold" style="font-size:14px">${escapeHtml(u.display_name)}</div>
+          <div class="text-muted" style="font-size:12px">@${escapeHtml(u.username)}</div>
+        </div>
+        <i class="bi bi-plus-circle ms-auto" style="color:var(--accent)"></i>
+      </div>
+    `).join('') || '<div class="text-muted text-center p-3 small">Tidak ditemukan</div>';
+  }, 400);
+});
+
+function addMember(id, name, avatar) {
+  if (selectedMemberIds.includes(id)) return showToast('Sudah ditambahkan', 'info');
+  selectedMemberIds.push(id);
+  const chip = document.createElement('div');
+  chip.id = `chip-${id}`;
+  chip.style.cssText = 'display:flex;align-items:center;gap:6px;background:var(--bg-input);padding:4px 10px;border-radius:20px;font-size:13px';
+  chip.innerHTML = `<img src="${avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${id}`}" style="width:20px;height:20px;border-radius:50%"> ${escapeHtml(name)} <i class="bi bi-x" style="cursor:pointer;color:var(--text-muted)" onclick="removeMember('${id}')"></i>`;
+  document.getElementById('selectedMembers').appendChild(chip);
+  memberSearch.value = '';
+  document.getElementById('memberSearchResults').innerHTML = '';
+}
+
+function removeMember(id) {
+  selectedMemberIds = selectedMemberIds.filter(m => m !== id);
+  document.getElementById(`chip-${id}`)?.remove();
+}
+
+async function createGroup() {
+  const name = document.getElementById('groupName').value.trim();
+  const desc = document.getElementById('groupDesc').value.trim();
+  if (!name) return showToast('Nama grup wajib diisi', 'error');
+  const res = await fetch('/api/groups/create', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ name, description: desc, members: selectedMemberIds })
+  }).then(r => r.json());
+  if (res.success) {
+    bootstrap.Modal.getInstance(document.getElementById('createGroupModal')).hide();
+    showToast('Grup berhasil dibuat!', 'success');
+    selectedMemberIds = [];
+    document.getElementById('selectedMembers').innerHTML = '';
+    document.getElementById('groupName').value = '';
+    document.getElementById('groupDesc').value = '';
+    loadGroups();
+  } else showToast(res.message || 'Gagal buat grup', 'error');
+}
+
+function escapeHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function formatTime(d) {
+  if (!d) return '';
+  const dt = new Date(d), now = new Date();
+  const diff = now - dt;
+  if (diff < 86400000) return dt.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+  return dt.toLocaleDateString('id-ID',{day:'2-digit',month:'short'});
+}
+
+loadGroups();
+</script>
+{% endblock %}

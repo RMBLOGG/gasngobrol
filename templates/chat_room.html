@@ -1,0 +1,347 @@
+{% extends 'base.html' %}
+{% block title %}Chat - ChatKu{% endblock %}
+
+{% block topnav %}
+<div class="d-flex align-items-center gap-2">
+  <button class="icon-btn" onclick="history.back()"><i class="bi bi-arrow-left"></i></button>
+  <div class="avatar-wrap" id="headerAvatarWrap" style="cursor:pointer" onclick="showUserInfo()">
+    <img src="" id="headerAvatar" class="avatar" style="width:38px;height:38px" alt="">
+    <span class="online-dot d-none" id="headerOnline"></span>
+  </div>
+  <div onclick="showUserInfo()" style="cursor:pointer">
+    <div id="headerName" class="fw-semibold" style="font-size:15px">...</div>
+    <div id="headerStatus" class="text-muted" style="font-size:11px">...</div>
+  </div>
+</div>
+<div class="d-flex align-items-center gap-1">
+  <button class="icon-btn" onclick="showChatInfo()" title="Info Chat"><i class="bi bi-info-circle"></i></button>
+  <button class="icon-btn" data-bs-toggle="dropdown"><i class="bi bi-three-dots-vertical"></i></button>
+  <ul class="dropdown-menu dropdown-menu-end">
+    <li><a class="dropdown-item" href="#" onclick="clearChat()"><i class="bi bi-trash me-2"></i>Hapus riwayat</a></li>
+    <li><a class="dropdown-item" href="#" onclick="blockUser()"><i class="bi bi-slash-circle me-2"></i>Blokir pengguna</a></li>
+  </ul>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="chat-room-page">
+  <!-- REPLY BAR (hidden by default) -->
+  <div id="replyBarContainer" style="display:none;padding:8px 12px;background:var(--bg-secondary);border-top:1px solid var(--border)">
+    <div class="reply-bar">
+      <div>
+        <div class="reply-author" id="replyAuthor">-</div>
+        <div id="replyContent" style="font-size:13px;color:var(--text-muted)">-</div>
+      </div>
+      <span class="reply-close" onclick="cancelReply()"><i class="bi bi-x-lg"></i></span>
+    </div>
+  </div>
+
+  <!-- MESSAGES -->
+  <div class="messages-container" id="messagesContainer">
+    <div class="loading-spinner"><div class="spinner"></div></div>
+  </div>
+
+  <!-- TYPING INDICATOR -->
+  <div id="typingIndicator" class="d-none px-4 pb-2">
+    <div class="typing-indicator">
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+      <div class="typing-dot"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MESSAGE INPUT -->
+<div class="msg-input-bar no-bottom">
+  <div class="input-row">
+    <button class="icon-btn" onclick="showAttachMenu()" title="Lampiran"><i class="bi bi-paperclip"></i></button>
+    <textarea class="msg-input" id="msgInput" placeholder="Tulis pesan..." rows="1" maxlength="2000"></textarea>
+    <button class="icon-btn" id="emojiBtn" title="Emoji"><i class="bi bi-emoji-smile"></i></button>
+    <button class="send-btn" id="sendBtn" onclick="sendMessage()"><i class="bi bi-send-fill"></i></button>
+  </div>
+</div>
+
+<!-- USER INFO MODAL -->
+<div class="modal fade" id="userInfoModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content glass-card">
+      <div class="modal-body text-center p-4">
+        <img src="" id="modalAvatar" class="avatar-xl mb-3 mx-auto d-block" style="border-radius:50%">
+        <h5 id="modalName">-</h5>
+        <div class="text-muted mb-2" id="modalUsername">-</div>
+        <div id="modalBio" class="mb-3" style="font-size:14px"></div>
+        <div id="modalOnlineStatus" class="mb-3" style="font-size:13px"></div>
+        <div class="d-flex gap-2 justify-content-center">
+          <button class="btn-accent px-4 py-2 rounded-3" data-bs-dismiss="modal">Tutup</button>
+          <button class="px-4 py-2 rounded-3" style="background:var(--bg-input);border:none;color:var(--text-primary)" onclick="addToContacts()">+ Kontak</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- EMOJI QUICK PANEL -->
+<div id="emojiPanel" class="d-none" style="position:fixed;bottom:140px;right:16px;background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:12px;z-index:200;max-width:280px">
+  <div class="d-flex flex-wrap gap-1">
+    {% set emojis = ['😀','😂','🥰','😎','🤔','😢','😡','🎉','👍','👎','❤️','🔥','✨','🙏','💯','😭','🤣','😍','🥺','😅','🤦','🤷','💪','🙌','👏'] %}
+    {% for e in emojis %}
+    <span style="font-size:24px;cursor:pointer;padding:2px" onclick="insertEmoji('{{ e }}')" title="{{ e }}">{{ e }}</span>
+    {% endfor %}
+  </div>
+</div>
+{% endblock %}
+
+{% block bottomnav %}{% endblock %}
+
+{% block scripts %}
+<script>
+const CHAT_ID = '{{ chat_id }}';
+const ME = {{ user | tojson }};
+let otherUser = null;
+let replyToId = null;
+let replyToContent = null;
+let lastDate = null;
+let allMessages = [];
+let polling = null;
+
+// ─── INIT ────────────────────────────────────────────────────────
+async function init() {
+  await loadMessages();
+  scrollToBottom();
+  startPolling();
+  markRead();
+  autoResizeInput();
+}
+
+async function loadMessages(silent = false) {
+  const msgs = await fetch(`/api/chats/${CHAT_ID}/messages`).then(r => r.json());
+  // Detect other user from first msg
+  if (!otherUser && msgs.length) {
+    const other = msgs.find(m => m.sender_id !== ME.user_id);
+    if (other) setHeader(other.sender);
+    else {
+      const meMsg = msgs[0];
+      // Load chat info to get other user
+    }
+  }
+  if (!otherUser) {
+    // Load from chat list
+    const chats = await fetch('/api/chats').then(r => r.json());
+    const c = chats.find(c => c.id === CHAT_ID);
+    if (c) setHeader(c.other_user);
+  }
+  renderMessages(msgs, silent);
+  allMessages = msgs;
+}
+
+function setHeader(user) {
+  otherUser = user;
+  document.getElementById('headerAvatar').src = user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.username}`;
+  document.getElementById('headerName').textContent = user.display_name;
+  const onlineDot = document.getElementById('headerOnline');
+  if (user.is_online) {
+    document.getElementById('headerStatus').textContent = 'Online';
+    document.getElementById('headerStatus').style.color = 'var(--accent)';
+    onlineDot.classList.remove('d-none');
+  } else {
+    document.getElementById('headerStatus').textContent = user.last_seen ? 'Terakhir aktif ' + formatTime(user.last_seen) : 'Offline';
+    onlineDot.classList.add('d-none');
+  }
+}
+
+function renderMessages(msgs, silent = false) {
+  const container = document.getElementById('messagesContainer');
+  const wasAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < 60;
+  lastDate = null;
+
+  if (!msgs.length) {
+    container.innerHTML = `<div class="empty-state"><div class="empty-icon">👋</div><div class="empty-title">Mulai percakapan!</div><div class="empty-sub">Kirim pesan pertamamu</div></div>`;
+    return;
+  }
+
+  container.innerHTML = msgs.map(msg => {
+    const isMe = msg.sender_id === ME.user_id;
+    const d = new Date(msg.created_at).toDateString();
+    let dateDivider = '';
+    if (d !== lastDate) {
+      lastDate = d;
+      dateDivider = `<div class="date-divider"><span>${formatDateDivider(msg.created_at)}</span></div>`;
+    }
+    const content = msg.is_deleted
+      ? `<span class="bubble-deleted"><i class="bi bi-slash-circle me-1"></i>Pesan dihapus</span>`
+      : escapeHtml(msg.content);
+
+    const replyHtml = msg.reply_to ? `<div class="reply-preview"><div class="reply-author">Balasan</div><div>${escapeHtml(msg.content.substring(0,60))}</div></div>` : '';
+
+    return `
+      ${dateDivider}
+      <div class="message-row ${isMe ? 'out' : ''}" id="msg-${msg.id}" oncontextmenu="msgMenu(event,'${msg.id}','${isMe}','${escapeHtml(msg.content)}')">
+        ${!isMe ? `<img src="${msg.sender?.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${msg.sender?.username}`}" class="avatar" style="width:28px;height:28px;margin-bottom:4px">` : ''}
+        <div class="bubble ${isMe ? 'out' : 'in'}">
+          ${replyHtml}
+          ${content}
+          <div class="bubble-time">${formatMessageTime(msg.created_at)} ${isMe ? `<i class="bi bi-check${msg.is_read ? '2-all bubble-read' : '2'}"></i>` : ''}</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  if (!silent || wasAtBottom) scrollToBottom();
+}
+
+// ─── SEND ────────────────────────────────────────────────────────
+async function sendMessage() {
+  const input = document.getElementById('msgInput');
+  const content = input.value.trim();
+  if (!content) return;
+
+  input.value = '';
+  input.style.height = 'auto';
+
+  const res = await fetch(`/api/chats/${CHAT_ID}/send`, {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ content, reply_to: replyToId })
+  }).then(r => r.json());
+
+  cancelReply();
+  if (res.success) loadMessages(true);
+  else showToast('Gagal kirim pesan', 'error');
+}
+
+// ─── REPLY ───────────────────────────────────────────────────────
+function setReply(msgId, content, author) {
+  replyToId = msgId;
+  replyToContent = content;
+  document.getElementById('replyBarContainer').style.display = 'block';
+  document.getElementById('replyAuthor').textContent = author;
+  document.getElementById('replyContent').textContent = content.substring(0, 80);
+  document.getElementById('msgInput').focus();
+}
+
+function cancelReply() {
+  replyToId = null;
+  replyToContent = null;
+  document.getElementById('replyBarContainer').style.display = 'none';
+}
+
+// ─── CONTEXT MENU ────────────────────────────────────────────────
+function msgMenu(e, msgId, isMe, content) {
+  e.preventDefault();
+  const existing = document.getElementById('ctxMenu');
+  if (existing) existing.remove();
+  const menu = document.createElement('div');
+  menu.id = 'ctxMenu';
+  menu.style.cssText = `position:fixed;top:${e.clientY}px;left:${Math.min(e.clientX, window.innerWidth-180)}px;background:var(--bg-card);border:1px solid var(--border);border-radius:10px;box-shadow:var(--shadow);z-index:999;min-width:160px;overflow:hidden`;
+  menu.innerHTML = `
+    <div onclick="setReply('${msgId}','${content.replace(/'/g,"\\'")}','${otherUser?.display_name||'Mereka'}')" style="padding:12px 16px;cursor:pointer;font-size:14px;display:flex;align-items:center;gap:8px"><i class="bi bi-reply"></i>Balas</div>
+    <div onclick="copyMsg('${content.replace(/'/g,"\\'")}')" style="padding:12px 16px;cursor:pointer;font-size:14px;display:flex;align-items:center;gap:8px"><i class="bi bi-clipboard"></i>Salin</div>
+    ${isMe === 'True' ? `<div onclick="deleteMsg('${msgId}')" style="padding:12px 16px;cursor:pointer;font-size:14px;color:#ff4757;display:flex;align-items:center;gap:8px"><i class="bi bi-trash"></i>Hapus</div>` : ''}
+  `;
+  document.body.appendChild(menu);
+  setTimeout(() => document.addEventListener('click', () => menu.remove(), { once: true }), 0);
+}
+
+function copyMsg(content) {
+  navigator.clipboard.writeText(content).then(() => showToast('Disalin!', 'success'));
+}
+
+async function deleteMsg(msgId) {
+  const res = await fetch(`/api/messages/${msgId}/delete`, { method: 'POST' }).then(r => r.json());
+  if (res.success) { loadMessages(true); showToast('Pesan dihapus'); }
+  else showToast('Gagal hapus', 'error');
+}
+
+// ─── USER INFO ───────────────────────────────────────────────────
+function showUserInfo() {
+  if (!otherUser) return;
+  document.getElementById('modalAvatar').src = otherUser.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${otherUser.username}`;
+  document.getElementById('modalName').textContent = otherUser.display_name;
+  document.getElementById('modalUsername').textContent = '@' + otherUser.username;
+  document.getElementById('modalBio').textContent = otherUser.bio || '';
+  document.getElementById('modalOnlineStatus').innerHTML = otherUser.is_online
+    ? '<span style="color:var(--accent)">● Online</span>'
+    : '<span style="color:var(--text-muted)">Offline</span>';
+  new bootstrap.Modal(document.getElementById('userInfoModal')).show();
+}
+
+async function addToContacts() {
+  if (!otherUser) return;
+  const res = await fetch('/api/contacts/add', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ contact_id: otherUser.id })
+  }).then(r => r.json());
+  showToast(res.success ? 'Kontak ditambahkan!' : res.message, res.success ? 'success' : 'error');
+}
+
+// ─── EMOJI ───────────────────────────────────────────────────────
+document.getElementById('emojiBtn').addEventListener('click', () => {
+  document.getElementById('emojiPanel').classList.toggle('d-none');
+});
+function insertEmoji(e) {
+  const input = document.getElementById('msgInput');
+  input.value += e;
+  input.focus();
+  document.getElementById('emojiPanel').classList.add('d-none');
+}
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('#emojiPanel') && !e.target.closest('#emojiBtn')) {
+    document.getElementById('emojiPanel')?.classList.add('d-none');
+  }
+});
+
+// ─── KEYBOARD SEND ───────────────────────────────────────────────
+document.getElementById('msgInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+
+// ─── AUTO RESIZE ─────────────────────────────────────────────────
+function autoResizeInput() {
+  const ta = document.getElementById('msgInput');
+  ta.addEventListener('input', () => {
+    ta.style.height = 'auto';
+    ta.style.height = Math.min(ta.scrollHeight, 120) + 'px';
+  });
+}
+
+// ─── POLLING ─────────────────────────────────────────────────────
+function startPolling() { polling = setInterval(() => loadMessages(true), 5000); }
+function markRead() { fetch(`/api/chats/${CHAT_ID}/read`, { method: 'POST' }); }
+
+// ─── UTILS ───────────────────────────────────────────────────────
+function scrollToBottom() {
+  const c = document.getElementById('messagesContainer');
+  c.scrollTop = c.scrollHeight;
+}
+function escapeHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function formatTime(d) {
+  if (!d) return '';
+  const dt = new Date(d), now = new Date();
+  const diff = now - dt;
+  if (diff < 86400000) return dt.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+  return dt.toLocaleDateString('id-ID',{day:'2-digit',month:'short'});
+}
+function formatMessageTime(d) { return new Date(d).toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'}); }
+function formatDateDivider(d) {
+  const dt = new Date(d), now = new Date();
+  const diff = Math.floor((now-dt)/86400000);
+  if (diff === 0) return 'Hari ini';
+  if (diff === 1) return 'Kemarin';
+  return dt.toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'});
+}
+
+function showAttachMenu() { showToast('Fitur lampiran segera hadir', 'info'); }
+function showChatInfo() { showUserInfo(); }
+function clearChat() { showToast('Fitur segera hadir', 'info'); }
+function blockUser() { showToast('Fitur segera hadir', 'info'); }
+
+function showToast(msg, type='info') {
+  const t = document.getElementById('appToast');
+  const tm = document.getElementById('toastMsg');
+  if (!t||!tm) return;
+  tm.textContent = msg;
+  t.className = `toast align-items-center border-0 text-white bg-${type==='error'?'danger':type==='success'?'success':'secondary'}`;
+  new bootstrap.Toast(t,{delay:3000}).show();
+}
+
+init();
+</script>
+{% endblock %}

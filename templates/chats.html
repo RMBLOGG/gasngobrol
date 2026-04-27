@@ -1,0 +1,195 @@
+{% extends 'base.html' %}
+{% block title %}Chat - ChatKu{% endblock %}
+
+{% block content %}
+<div class="px-0">
+  <!-- TABS -->
+  <div class="d-flex border-bottom" style="border-color:var(--border)!important;background:var(--bg-secondary);position:sticky;top:var(--nav-height);z-index:50">
+    <button class="flex-1 py-3 border-0 bg-transparent tab-btn active" id="tabChats" onclick="switchTab('chats')" style="color:var(--accent);border-bottom:2px solid var(--accent)!important;font-weight:600;font-size:14px">
+      💬 Chat
+    </button>
+    <button class="flex-1 py-3 border-0 bg-transparent tab-btn" id="tabStatus" onclick="switchTab('status')" style="color:var(--text-muted);font-size:14px">
+      🔵 Status
+    </button>
+    <button class="flex-1 py-3 border-0 bg-transparent tab-btn" id="tabCalls" onclick="switchTab('calls')" style="color:var(--text-muted);font-size:14px">
+      📞 Panggilan
+    </button>
+  </div>
+
+  <!-- CHAT LIST -->
+  <div id="panelChats">
+    <div id="chatList"><div class="loading-spinner"><div class="spinner"></div></div></div>
+  </div>
+
+  <!-- STATUS PANEL -->
+  <div id="panelStatus" class="d-none">
+    <div class="p-3">
+      <div class="section-header">Status Kamu</div>
+      <div class="chat-item" id="myStatusItem" onclick="showAddStatus()">
+        <div class="avatar-wrap">
+          <div class="status-ring" id="myStatusRing">
+            <img src="" id="myStatusAvatar" alt="me">
+          </div>
+        </div>
+        <div>
+          <div class="fw-semibold">Status saya</div>
+          <div class="text-muted" style="font-size:13px">Tap untuk menambahkan status</div>
+        </div>
+      </div>
+
+      <div class="section-header mt-3">Update Terbaru</div>
+      <div id="statusList"><div class="text-muted text-center p-4" style="font-size:14px">Belum ada status dari kontak</div></div>
+    </div>
+  </div>
+
+  <!-- CALLS PANEL -->
+  <div id="panelCalls" class="d-none">
+    <div class="empty-state">
+      <div class="empty-icon">📞</div>
+      <div class="empty-title">Belum ada riwayat panggilan</div>
+      <div class="empty-sub">Fitur panggilan segera hadir</div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD STATUS MODAL -->
+<div class="modal fade" id="addStatusModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content glass-card">
+      <div class="modal-header border-0">
+        <h5 class="modal-title">Tambah Status</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label text-muted" style="font-size:13px">Tipe Status</label>
+          <select class="form-select" id="statusType">
+            <option value="text">📝 Teks</option>
+            <option value="emoji">😄 Emoji</option>
+          </select>
+        </div>
+        <div class="mb-3">
+          <label class="form-label text-muted" style="font-size:13px">Isi Status</label>
+          <textarea class="form-control" id="statusContent" rows="3" placeholder="Apa yang kamu pikirkan?"></textarea>
+        </div>
+        <div class="mb-3">
+          <label class="form-label text-muted" style="font-size:13px">Warna Latar</label>
+          <div class="d-flex gap-2 flex-wrap">
+            <div class="color-pick selected" style="width:32px;height:32px;border-radius:50%;background:#075e54;cursor:pointer;border:3px solid var(--accent)" data-color="#075e54" onclick="pickColor(this)"></div>
+            <div class="color-pick" style="width:32px;height:32px;border-radius:50%;background:#1a1a2e;cursor:pointer" data-color="#1a1a2e" onclick="pickColor(this)"></div>
+            <div class="color-pick" style="width:32px;height:32px;border-radius:50%;background:#7c4dff;cursor:pointer" data-color="#7c4dff" onclick="pickColor(this)"></div>
+            <div class="color-pick" style="width:32px;height:32px;border-radius:50%;background:#e91e63;cursor:pointer" data-color="#e91e63" onclick="pickColor(this)"></div>
+            <div class="color-pick" style="width:32px;height:32px;border-radius:50%;background:#ff6f00;cursor:pointer" data-color="#ff6f00" onclick="pickColor(this)"></div>
+            <div class="color-pick" style="width:32px;height:32px;border-radius:50%;background:#1565c0;cursor:pointer" data-color="#1565c0" onclick="pickColor(this)"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer border-0">
+        <button class="btn-accent px-4 py-2 rounded-3" onclick="submitStatus()">Posting Status</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let selectedColor = '#075e54';
+const ME = {{ user | tojson }};
+
+function switchTab(tab) {
+  ['chats','status','calls'].forEach(t => {
+    document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).style.color = t === tab ? 'var(--accent)' : 'var(--text-muted)';
+    document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1)).style.borderBottom = t === tab ? '2px solid var(--accent)' : 'none';
+    document.getElementById('panel' + t.charAt(0).toUpperCase() + t.slice(1)).classList.toggle('d-none', t !== tab);
+  });
+  if (tab === 'status') loadStatus();
+}
+
+async function loadChats() {
+  const chats = await fetch('/api/chats').then(r => r.json());
+  const el = document.getElementById('chatList');
+  if (!chats.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">💬</div><div class="empty-title">Belum ada chat</div><div class="empty-sub">Mulai chat baru dengan tombol + di bawah</div></div>`;
+    return;
+  }
+  el.innerHTML = chats.map(c => `
+    <div class="chat-item fade-up" onclick="window.location='/chat/${c.id}'">
+      <div class="avatar-wrap">
+        <img src="${c.other_user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${c.other_user.username}`}" class="avatar" alt="">
+        ${c.other_user.is_online ? '<span class="online-dot"></span>' : ''}
+      </div>
+      <div class="chat-info">
+        <div class="chat-name">${escapeHtml(c.other_user.display_name)}</div>
+        <div class="chat-preview">${escapeHtml(c.last_message || 'Mulai percakapan...')}</div>
+      </div>
+      <div class="chat-meta">
+        <div class="chat-time">${formatTime(c.last_message_at)}</div>
+        ${c.unread_count > 0 ? `<div class="unread-badge">${c.unread_count}</div>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+async function loadStatus() {
+  const myAvatar = ME.avatar || `https://api.dicebear.com/7.x/avataaars/svg?seed=${ME.username}`;
+  document.getElementById('myStatusAvatar').src = myAvatar;
+
+  const statuses = await fetch('/api/status/all').then(r => r.json());
+  const el = document.getElementById('statusList');
+  if (!statuses.length) { el.innerHTML = '<div class="text-muted text-center p-4" style="font-size:14px">Belum ada status dari kontak</div>'; return; }
+  el.innerHTML = statuses.map(s => `
+    <div class="chat-item">
+      <div class="status-ring">
+        <img src="${s.user.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${s.user.username}`}" alt="">
+      </div>
+      <div class="chat-info">
+        <div class="chat-name">${escapeHtml(s.user.display_name)}</div>
+        <div class="chat-preview">${escapeHtml(s.content)}</div>
+      </div>
+      <div class="chat-time">${formatTime(s.created_at)}</div>
+    </div>
+  `).join('');
+}
+
+function showAddStatus() {
+  new bootstrap.Modal(document.getElementById('addStatusModal')).show();
+}
+
+function pickColor(el) {
+  document.querySelectorAll('.color-pick').forEach(c => c.style.border = 'none');
+  el.style.border = '3px solid var(--accent)';
+  selectedColor = el.dataset.color;
+}
+
+async function submitStatus() {
+  const content = document.getElementById('statusContent').value.trim();
+  if (!content) return showToast('Status tidak boleh kosong', 'error');
+  const res = await fetch('/api/status/add', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ content, type: document.getElementById('statusType').value, bg_color: selectedColor })
+  }).then(r => r.json());
+  if (res.success) {
+    bootstrap.Modal.getInstance(document.getElementById('addStatusModal')).hide();
+    showToast('Status diposting!', 'success');
+    loadStatus();
+  } else showToast(res.message, 'error');
+}
+
+function escapeHtml(str) {
+  return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function formatTime(d) {
+  if (!d) return '';
+  const dt = new Date(d), now = new Date();
+  const diff = now - dt;
+  if (diff < 60000) return 'Baru saja';
+  if (diff < 3600000) return Math.floor(diff/60000) + ' mnt';
+  if (diff < 86400000) return dt.toLocaleTimeString('id-ID',{hour:'2-digit',minute:'2-digit'});
+  return dt.toLocaleDateString('id-ID',{day:'2-digit',month:'short'});
+}
+
+loadChats();
+setInterval(loadChats, 10000);
+</script>
+{% endblock %}

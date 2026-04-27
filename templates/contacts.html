@@ -1,0 +1,149 @@
+{% extends 'base.html' %}
+{% block title %}Kontak - ChatKu{% endblock %}
+
+{% block topnav %}
+<div class="d-flex align-items-center gap-2">
+  <span class="app-logo">👤</span>
+  <span class="app-name">Kontak</span>
+</div>
+<button class="icon-btn" data-bs-toggle="modal" data-bs-target="#addContactModal"><i class="bi bi-person-plus"></i></button>
+{% endblock %}
+
+{% block content %}
+<div class="p-3">
+  <div class="search-box mb-3">
+    <i class="bi bi-search search-icon"></i>
+    <input type="text" class="form-control ps-5" id="contactFilter" placeholder="Cari kontak...">
+  </div>
+  <div id="contactList"><div class="loading-spinner"><div class="spinner"></div></div></div>
+</div>
+
+<!-- ADD CONTACT MODAL -->
+<div class="modal fade" id="addContactModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content glass-card">
+      <div class="modal-header border-0">
+        <h5 class="modal-title">Tambah Kontak</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="search-box mb-3">
+          <i class="bi bi-search search-icon"></i>
+          <input type="text" class="form-control ps-5" id="userSearchInput" placeholder="Cari username...">
+        </div>
+        <div id="userSearchResults"></div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let allContacts = [];
+
+async function loadContacts() {
+  const data = await fetch('/api/contacts').then(r => r.json());
+  allContacts = data;
+  renderContacts(data);
+}
+
+function renderContacts(contacts) {
+  const el = document.getElementById('contactList');
+  if (!contacts.length) {
+    el.innerHTML = `<div class="empty-state"><div class="empty-icon">👥</div><div class="empty-title">Belum ada kontak</div><div class="empty-sub">Tambah kontak baru untuk mulai chat</div></div>`;
+    return;
+  }
+  // Group by first letter
+  const grouped = {};
+  contacts.forEach(c => {
+    const u = c.contact;
+    if (!u) return;
+    const letter = u.display_name[0].toUpperCase();
+    if (!grouped[letter]) grouped[letter] = [];
+    grouped[letter].push(c);
+  });
+  el.innerHTML = Object.keys(grouped).sort().map(letter => `
+    <div class="section-header">${letter}</div>
+    ${grouped[letter].map(c => {
+      const u = c.contact;
+      return `<div class="chat-item" onclick="openChat('${u.id}')">
+        <div class="avatar-wrap">
+          <img src="${u.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.username}`}" class="avatar">
+          ${u.is_online ? '<span class="online-dot"></span>' : ''}
+        </div>
+        <div class="chat-info">
+          <div class="chat-name">${escapeHtml(u.display_name)}</div>
+          <div class="chat-preview">@${escapeHtml(u.username)} ${u.bio ? '· ' + escapeHtml(u.bio) : ''}</div>
+        </div>
+        <div class="d-flex gap-1">
+          <button class="icon-btn" onclick="event.stopPropagation();openChat('${u.id}')" title="Chat"><i class="bi bi-chat-dots"></i></button>
+          <button class="icon-btn text-danger" onclick="event.stopPropagation();removeContact('${u.id}','${escapeHtml(u.display_name)}')" title="Hapus"><i class="bi bi-person-dash"></i></button>
+        </div>
+      </div>`;
+    }).join('')}
+  `).join('');
+}
+
+document.getElementById('contactFilter').addEventListener('input', (e) => {
+  const q = e.target.value.toLowerCase();
+  const filtered = allContacts.filter(c => c.contact && (
+    c.contact.display_name.toLowerCase().includes(q) || c.contact.username.toLowerCase().includes(q)
+  ));
+  renderContacts(filtered);
+});
+
+async function openChat(userId) {
+  const res = await fetch('/api/chats/open', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ user_id: userId })
+  }).then(r => r.json());
+  if (res.success) window.location.href = `/chat/${res.chat_id}`;
+  else showToast(res.message || 'Gagal membuka chat', 'error');
+}
+
+async function removeContact(userId, name) {
+  if (!confirm(`Hapus ${name} dari kontak?`)) return;
+  const res = await fetch('/api/contacts/remove', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ contact_id: userId })
+  }).then(r => r.json());
+  if (res.success) { showToast('Kontak dihapus'); loadContacts(); }
+  else showToast(res.message, 'error');
+}
+
+const userSearchInput = document.getElementById('userSearchInput');
+let timer;
+userSearchInput?.addEventListener('input', () => {
+  clearTimeout(timer);
+  const q = userSearchInput.value.trim();
+  const el = document.getElementById('userSearchResults');
+  if (q.length < 2) { el.innerHTML = ''; return; }
+  timer = setTimeout(async () => {
+    const users = await fetch(`/api/users/search?q=${encodeURIComponent(q)}`).then(r => r.json());
+    el.innerHTML = users.map(u => `
+      <div class="user-list-item">
+        <img src="${u.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.username}`}" class="avatar" style="width:40px;height:40px">
+        <div class="flex-1">
+          <div class="fw-semibold">${escapeHtml(u.display_name)}</div>
+          <div class="text-muted" style="font-size:13px">@${escapeHtml(u.username)}</div>
+        </div>
+        <button class="btn-accent px-3 py-1 rounded-3" style="font-size:13px" onclick="addContact('${u.id}')">+ Tambah</button>
+      </div>
+    `).join('') || '<div class="text-center text-muted p-3">Tidak ditemukan</div>';
+  }, 400);
+});
+
+async function addContact(userId) {
+  const res = await fetch('/api/contacts/add', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ contact_id: userId })
+  }).then(r => r.json());
+  showToast(res.success ? 'Kontak ditambahkan!' : res.message, res.success ? 'success' : 'error');
+  if (res.success) { bootstrap.Modal.getInstance(document.getElementById('addContactModal')).hide(); loadContacts(); }
+}
+
+function escapeHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+loadContacts();
+</script>
+{% endblock %}

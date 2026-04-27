@@ -1,0 +1,169 @@
+{% extends 'base.html' %}
+{% block title %}Profil - ChatKu{% endblock %}
+
+{% block topnav %}
+<div class="d-flex align-items-center gap-2">
+  <span class="app-logo">👤</span>
+  <span class="app-name">Profil</span>
+</div>
+<button class="icon-btn" onclick="toggleEdit()" id="editBtn" title="Edit Profil"><i class="bi bi-pencil"></i></button>
+{% endblock %}
+
+{% block content %}
+<div id="profileContent"><div class="loading-spinner"><div class="spinner"></div></div></div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const ME = {{ user | tojson }};
+let editing = false;
+let userData = null;
+
+async function loadProfile() {
+  userData = await fetch('/api/users/me').then(r => r.json());
+  renderProfile();
+}
+
+function renderProfile() {
+  const u = userData;
+  document.getElementById('profileContent').innerHTML = `
+    <div class="profile-header">
+      <div class="avatar-wrap d-inline-block mb-3">
+        <img src="${u.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${u.username}`}" class="avatar-xl" style="border-radius:50%;border:3px solid var(--accent)">
+        ${u.is_online ? '<span class="online-dot" style="width:16px;height:16px;border-width:3px"></span>' : ''}
+      </div>
+      <h4 class="fw-bold mb-1" id="displayNameShow">${escapeHtml(u.display_name)}</h4>
+      <div class="text-muted mb-1">@${escapeHtml(u.username)}</div>
+      <div style="font-size:14px;color:var(--text-secondary)" id="bioShow">${escapeHtml(u.bio || 'Belum ada bio')}</div>
+      <div class="mt-2">
+        <span style="font-size:12px;background:rgba(0,168,132,0.15);color:var(--accent);padding:3px 10px;border-radius:10px">
+          ${u.is_online ? '🟢 Online' : '⚫ Offline'}
+        </span>
+      </div>
+    </div>
+
+    <!-- STATS -->
+    <div class="p-3">
+      <div class="profile-stats mb-4" id="statsSection">
+        <div class="stat-item"><div class="stat-value" id="statChats">-</div><div class="stat-label">Chat</div></div>
+        <div class="stat-item"><div class="stat-value" id="statContacts">-</div><div class="stat-label">Kontak</div></div>
+        <div class="stat-item"><div class="stat-value" id="statGroups">-</div><div class="stat-label">Grup</div></div>
+      </div>
+
+      <!-- EDIT FORM (hidden by default) -->
+      <div id="editForm" class="d-none glass-card p-3 mb-4">
+        <h6 class="fw-bold mb-3">Edit Profil</h6>
+        <div class="mb-3">
+          <label class="form-label text-muted" style="font-size:13px">Nama Lengkap</label>
+          <input type="text" class="form-control" id="editName" value="${escapeHtml(u.display_name)}">
+        </div>
+        <div class="mb-3">
+          <label class="form-label text-muted" style="font-size:13px">Bio</label>
+          <textarea class="form-control" id="editBio" rows="3">${escapeHtml(u.bio || '')}</textarea>
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn-accent px-4 py-2 rounded-3 flex-1" onclick="saveProfile()">Simpan</button>
+          <button onclick="toggleEdit()" style="flex:1;background:var(--bg-input);border:none;color:var(--text-primary);border-radius:8px;padding:10px">Batal</button>
+        </div>
+      </div>
+
+      <!-- INFO TILES -->
+      <div class="glass-card mb-3">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border)">
+          <div class="text-muted" style="font-size:12px">Username</div>
+          <div class="fw-semibold">@${escapeHtml(u.username)}</div>
+        </div>
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border)">
+          <div class="text-muted" style="font-size:12px">Bergabung</div>
+          <div class="fw-semibold">${u.created_at ? new Date(u.created_at).toLocaleDateString('id-ID',{day:'2-digit',month:'long',year:'numeric'}) : '-'}</div>
+        </div>
+        <div style="padding:12px 16px">
+          <div class="text-muted" style="font-size:12px">Status</div>
+          <div class="fw-semibold" style="color:var(--accent)">${u.is_online ? 'Online' : 'Offline'}</div>
+        </div>
+      </div>
+
+      <!-- MENU -->
+      <div class="glass-card mb-3">
+        <div class="chat-item" onclick="window.location='/contacts'">
+          <i class="bi bi-people" style="font-size:20px;color:var(--accent);width:32px"></i>
+          <div class="chat-info"><div class="chat-name">Kontak Saya</div></div>
+          <i class="bi bi-chevron-right text-muted"></i>
+        </div>
+        <div class="chat-item" onclick="window.location='/groups'">
+          <i class="bi bi-chat-square-dots" style="font-size:20px;color:#7c4dff;width:32px"></i>
+          <div class="chat-info"><div class="chat-name">Grup Saya</div></div>
+          <i class="bi bi-chevron-right text-muted"></i>
+        </div>
+        <div class="chat-item" data-bs-toggle="modal" data-bs-target="#settingsModal" style="cursor:pointer">
+          <i class="bi bi-gear" style="font-size:20px;color:#ffa502;width:32px"></i>
+          <div class="chat-info"><div class="chat-name">Pengaturan</div></div>
+          <i class="bi bi-chevron-right text-muted"></i>
+        </div>
+        <div class="chat-item" onclick="shareApp()">
+          <i class="bi bi-share" style="font-size:20px;color:#2ed573;width:32px"></i>
+          <div class="chat-info"><div class="chat-name">Bagikan ChatKu</div></div>
+          <i class="bi bi-chevron-right text-muted"></i>
+        </div>
+      </div>
+
+      <!-- LOGOUT -->
+      <a href="/logout" class="d-block text-center py-3 rounded-3 mb-4" style="background:rgba(255,71,87,0.1);color:#ff4757;font-weight:600;border:1px solid rgba(255,71,87,0.2)">
+        <i class="bi bi-box-arrow-right me-2"></i>Keluar Akun
+      </a>
+
+      <div class="text-center text-muted" style="font-size:12px">ChatKu v1.0 · Dibuat dengan ❤️</div>
+    </div>
+  `;
+  loadStats();
+}
+
+async function loadStats() {
+  const [chats, contacts, groups] = await Promise.all([
+    fetch('/api/chats').then(r => r.json()),
+    fetch('/api/contacts').then(r => r.json()),
+    fetch('/api/groups').then(r => r.json())
+  ]);
+  document.getElementById('statChats').textContent = chats.length || 0;
+  document.getElementById('statContacts').textContent = contacts.length || 0;
+  document.getElementById('statGroups').textContent = groups.length || 0;
+}
+
+function toggleEdit() {
+  editing = !editing;
+  const form = document.getElementById('editForm');
+  const btn = document.getElementById('editBtn');
+  if (form) {
+    form.classList.toggle('d-none', !editing);
+    btn.innerHTML = editing ? '<i class="bi bi-x-lg"></i>' : '<i class="bi bi-pencil"></i>';
+  }
+}
+
+async function saveProfile() {
+  const name = document.getElementById('editName').value.trim();
+  const bio = document.getElementById('editBio').value.trim();
+  if (!name) return showToast('Nama tidak boleh kosong', 'error');
+  const res = await fetch('/api/users/me/update', {
+    method: 'POST', headers: {'Content-Type':'application/json'},
+    body: JSON.stringify({ display_name: name, bio })
+  }).then(r => r.json());
+  if (res.success) {
+    showToast('Profil disimpan!', 'success');
+    editing = false;
+    await loadProfile();
+  } else showToast(res.message, 'error');
+}
+
+function shareApp() {
+  if (navigator.share) {
+    navigator.share({ title: 'ChatKu', text: 'Chat real-time gratis!', url: window.location.origin });
+  } else {
+    navigator.clipboard.writeText(window.location.origin).then(() => showToast('Link disalin!', 'success'));
+  }
+}
+
+function escapeHtml(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+loadProfile();
+</script>
+{% endblock %}

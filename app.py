@@ -114,37 +114,46 @@ def logout():
     session.clear()
     return redirect(url_for('login'))
 
+def session_dict():
+    """Convert Flask session LocalProxy to plain dict for Jinja tojson"""
+    return {
+        'user_id': session.get('user_id', ''),
+        'username': session.get('username', ''),
+        'display_name': session.get('display_name', ''),
+        'avatar': session.get('avatar', '')
+    }
+
 # ─── MAIN PAGES ───────────────────────────────────────────────────────────────
 
 @app.route('/chats')
 @login_required
 def chats():
-    return render_template('chats.html', user=session)
+    return render_template('chats.html', user=session_dict())
 
 @app.route('/groups')
 @login_required
 def groups():
-    return render_template('groups.html', user=session)
+    return render_template('groups.html', user=session_dict())
 
 @app.route('/contacts')
 @login_required
 def contacts():
-    return render_template('contacts.html', user=session)
+    return render_template('contacts.html', user=session_dict())
 
 @app.route('/profile')
 @login_required
 def profile():
-    return render_template('profile.html', user=session)
+    return render_template('profile.html', user=session_dict())
 
 @app.route('/chat/<chat_id>')
 @login_required
 def chat_room(chat_id):
-    return render_template('chat_room.html', chat_id=chat_id, user=session)
+    return render_template('chat_room.html', chat_id=chat_id, user=session_dict())
 
 @app.route('/group/<group_id>')
 @login_required
 def group_room(group_id):
-    return render_template('group_room.html', group_id=group_id, user=session)
+    return render_template('group_room.html', group_id=group_id, user=session_dict())
 
 # ─── API: USERS ───────────────────────────────────────────────────────────────
 

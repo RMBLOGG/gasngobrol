@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="id" data-bs-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+  <title>Daftar - ChatKu</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="/static/css/main.css" rel="stylesheet">
+</head>
+<body>
+<div class="auth-page" style="padding: 40px 24px;">
+  <div class="auth-card fade-up" style="max-width:420px">
+    <div class="auth-logo">
+      <div class="logo-icon">💬</div>
+      <h1>Daftar Akun</h1>
+      <p>Buat akunmu sekarang, gratis!</p>
+    </div>
+
+    <div id="errorAlert" class="alert alert-danger d-none rounded-3" style="font-size:14px"></div>
+    <div id="successAlert" class="alert alert-success d-none rounded-3" style="font-size:14px"></div>
+
+    <form id="registerForm">
+      <div class="mb-3">
+        <label class="form-label text-muted" style="font-size:13px">Nama Lengkap</label>
+        <div class="input-group">
+          <span class="input-group-text" style="background:var(--bg-input);border-color:var(--border);color:var(--text-muted)"><i class="bi bi-person-badge"></i></span>
+          <input type="text" class="form-control" id="display_name" placeholder="Nama kamu" required>
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label text-muted" style="font-size:13px">Username</label>
+        <div class="input-group">
+          <span class="input-group-text" style="background:var(--bg-input);border-color:var(--border);color:var(--text-muted)">@</span>
+          <input type="text" class="form-control" id="username" placeholder="username unik" required>
+        </div>
+        <div style="font-size:12px;color:var(--text-muted);margin-top:4px">Minimal 3 karakter, tanpa spasi</div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label text-muted" style="font-size:13px">Bio (opsional)</label>
+        <input type="text" class="form-control" id="bio" placeholder="Ceritakan sedikit tentang kamu...">
+      </div>
+      <div class="mb-3">
+        <label class="form-label text-muted" style="font-size:13px">Password</label>
+        <div class="input-group">
+          <span class="input-group-text" style="background:var(--bg-input);border-color:var(--border);color:var(--text-muted)"><i class="bi bi-lock"></i></span>
+          <input type="password" class="form-control" id="password" placeholder="Min. 6 karakter" required>
+        </div>
+      </div>
+      <div class="mb-4">
+        <label class="form-label text-muted" style="font-size:13px">Konfirmasi Password</label>
+        <div class="input-group">
+          <span class="input-group-text" style="background:var(--bg-input);border-color:var(--border);color:var(--text-muted)"><i class="bi bi-lock-fill"></i></span>
+          <input type="password" class="form-control" id="confirm_password" placeholder="Ulangi password" required>
+        </div>
+      </div>
+
+      <!-- PASSWORD STRENGTH -->
+      <div id="pwStrength" class="mb-3" style="display:none">
+        <div style="font-size:12px;color:var(--text-muted);margin-bottom:4px">Kekuatan password: <span id="pwStrengthLabel">-</span></div>
+        <div style="height:4px;border-radius:2px;background:var(--bg-input);overflow:hidden">
+          <div id="pwStrengthBar" style="height:100%;width:0%;transition:width 0.3s,background 0.3s;border-radius:2px"></div>
+        </div>
+      </div>
+
+      <button type="submit" class="btn-accent w-100 py-3 rounded-3" id="regBtn" style="font-size:16px">
+        <span id="btnText">Buat Akun</span>
+        <span id="btnSpinner" class="d-none"><span class="spinner-border spinner-border-sm me-2"></span>Memproses...</span>
+      </button>
+    </form>
+
+    <div class="text-center mt-4" style="font-size:14px;color:var(--text-muted)">
+      Sudah punya akun? <a href="/login" style="color:var(--accent);font-weight:600">Masuk di sini</a>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+  const pwInput = document.getElementById('password');
+  const pwStrength = document.getElementById('pwStrength');
+  const pwStrengthBar = document.getElementById('pwStrengthBar');
+  const pwStrengthLabel = document.getElementById('pwStrengthLabel');
+
+  pwInput.addEventListener('input', () => {
+    const val = pwInput.value;
+    pwStrength.style.display = val ? 'block' : 'none';
+    let score = 0;
+    if (val.length >= 6) score++;
+    if (val.length >= 10) score++;
+    if (/[A-Z]/.test(val)) score++;
+    if (/[0-9]/.test(val)) score++;
+    if (/[^A-Za-z0-9]/.test(val)) score++;
+    const labels = ['', 'Lemah', 'Cukup', 'Sedang', 'Kuat', 'Sangat Kuat'];
+    const colors = ['', '#ff4757', '#ffa502', '#eccc68', '#2ed573', '#00a884'];
+    pwStrengthBar.style.width = (score * 20) + '%';
+    pwStrengthBar.style.background = colors[score];
+    pwStrengthLabel.textContent = labels[score] || '-';
+    pwStrengthLabel.style.color = colors[score];
+  });
+
+  document.getElementById('registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('regBtn');
+    const btnText = document.getElementById('btnText');
+    const btnSpinner = document.getElementById('btnSpinner');
+    const errDiv = document.getElementById('errorAlert');
+    const sucDiv = document.getElementById('successAlert');
+
+    btnText.classList.add('d-none');
+    btnSpinner.classList.remove('d-none');
+    btn.disabled = true;
+    errDiv.classList.add('d-none');
+    sucDiv.classList.add('d-none');
+
+    const data = {
+      display_name: document.getElementById('display_name').value,
+      username: document.getElementById('username').value.toLowerCase().trim(),
+      bio: document.getElementById('bio').value,
+      password: document.getElementById('password').value,
+      confirm_password: document.getElementById('confirm_password').value
+    };
+
+    try {
+      const res = await fetch('/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data)
+      });
+      const result = await res.json();
+      if (result.success) {
+        sucDiv.textContent = 'Akun berhasil dibuat! Mengalihkan ke halaman login...';
+        sucDiv.classList.remove('d-none');
+        setTimeout(() => window.location.href = '/login', 2000);
+      } else {
+        errDiv.textContent = result.message || 'Terjadi kesalahan';
+        errDiv.classList.remove('d-none');
+      }
+    } catch {
+      errDiv.textContent = 'Koneksi bermasalah, coba lagi';
+      errDiv.classList.remove('d-none');
+    } finally {
+      btnText.classList.remove('d-none');
+      btnSpinner.classList.add('d-none');
+      btn.disabled = false;
+    }
+  });
+</script>
+</body>
+</html>

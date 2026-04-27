@@ -1,0 +1,14 @@
+{
+  "name": "ChatKu",
+  "short_name": "ChatKu",
+  "description": "Chat real-time gratis dan cepat",
+  "start_url": "/chats",
+  "display": "standalone",
+  "background_color": "#0d1117",
+  "theme_color": "#00a884",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "https://api.dicebear.com/7.x/icons/svg?seed=chatku", "sizes": "192x192", "type": "image/svg+xml" },
+    { "src": "https://api.dicebear.com/7.x/icons/svg?seed=chatku", "sizes": "512x512", "type": "image/svg+xml" }
+  ]
+}
